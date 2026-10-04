@@ -35,4 +35,16 @@ app.get("/", (req, res) => {
   res.send("AI Interview Backend Running 🚀");
 });
 
+// Keep API failures machine-readable. In particular, Multer otherwise sends
+// an HTML error page when a CV has the wrong type or exceeds 10 MB.
+app.use((error, req, res, next) => { // eslint-disable-line no-unused-vars
+  if (error?.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ message: "Resume file must be 10MB or smaller" });
+  }
+  if (error) {
+    return res.status(400).json({ message: error.message || "Invalid request" });
+  }
+  return next();
+});
+
 module.exports = app;
