@@ -30,6 +30,7 @@ exports.startInterview = async (req, res) => {
     
     const fastApiResponse = await axios.post(`${FASTAPI_URL}/interview`, formData, {
       headers: formData.getHeaders(),
+      timeout: 45000,
     });
 
     if (fastApiResponse.data.error) {
@@ -67,9 +68,10 @@ exports.startInterview = async (req, res) => {
 
   } catch (error) {
     console.error("Error starting interview:", error.message);
-    res.status(500).json({ 
-      message: "Failed to start interview. Make sure the AI microservice is running.",
-      error: error.message 
+    const upstreamStatus = error.response?.status;
+    res.status(upstreamStatus && upstreamStatus < 500 ? upstreamStatus : 502).json({
+      message: upstreamStatus ? "The AI service could not process this resume." : "The AI service is unavailable. Please try again.",
+      error: error.response?.data?.detail || error.message
     });
   }
 };
@@ -107,7 +109,7 @@ exports.submitAnswer = async (req, res) => {
       answer: answer,
       jd: interview.jd,
       difficulty: interview.difficulty,
-    });
+    }, { timeout: 45000 });
 
     if (evaluationResponse.data.error) {
       return res.status(500).json({ 
@@ -152,9 +154,10 @@ exports.submitAnswer = async (req, res) => {
 
   } catch (error) {
     console.error("Error submitting answer:", error.message);
-    res.status(500).json({ 
-      message: "Failed to evaluate answer. Make sure the AI microservice is running.",
-      error: error.message 
+    const upstreamStatus = error.response?.status;
+    res.status(upstreamStatus && upstreamStatus < 500 ? upstreamStatus : 502).json({
+      message: upstreamStatus ? "The AI service could not evaluate this answer." : "The AI service is unavailable. Please try again.",
+      error: error.response?.data?.detail || error.message
     });
   }
 };
