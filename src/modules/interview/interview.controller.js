@@ -3,6 +3,7 @@ const FormData = require("form-data");
 const Interview = require("./interview.model");
 
 const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8000";
+const FASTAPI_TIMEOUT_MS = 90000;
 
 // 1. START INTERVIEW (Parses CV and generates questions)
 exports.startInterview = async (req, res) => {
@@ -30,7 +31,7 @@ exports.startInterview = async (req, res) => {
     
     const fastApiResponse = await axios.post(`${FASTAPI_URL}/interview`, formData, {
       headers: formData.getHeaders(),
-      timeout: 45000,
+      timeout: FASTAPI_TIMEOUT_MS,
     });
 
     if (fastApiResponse.data.error) {
@@ -69,8 +70,16 @@ exports.startInterview = async (req, res) => {
   } catch (error) {
     console.error("Error starting interview:", error.message);
     const upstreamStatus = error.response?.status;
-    res.status(upstreamStatus && upstreamStatus < 500 ? upstreamStatus : 502).json({
-      message: upstreamStatus ? "The AI service could not process this resume." : "The AI service is unavailable. Please try again.",
+    const isTimeout = error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
+    const isClientError = upstreamStatus && upstreamStatus < 500;
+    res.status(isTimeout ? 504 : isClientError ? upstreamStatus : 502).json({
+      message: isTimeout
+        ? "The AI service took too long to wake or process this resume. Please try again."
+        : isClientError
+          ? "The AI service could not process this resume."
+          : upstreamStatus
+            ? "The AI service returned an error. Check its Render logs and try again."
+          : "The AI service is unavailable. Please try again.",
       error: error.response?.data?.detail || error.message
     });
   }
@@ -109,7 +118,7 @@ exports.submitAnswer = async (req, res) => {
       answer: answer,
       jd: interview.jd,
       difficulty: interview.difficulty,
-    }, { timeout: 45000 });
+    }, { timeout: FASTAPI_TIMEOUT_MS });
 
     if (evaluationResponse.data.error) {
       return res.status(500).json({ 
@@ -155,8 +164,16 @@ exports.submitAnswer = async (req, res) => {
   } catch (error) {
     console.error("Error submitting answer:", error.message);
     const upstreamStatus = error.response?.status;
-    res.status(upstreamStatus && upstreamStatus < 500 ? upstreamStatus : 502).json({
-      message: upstreamStatus ? "The AI service could not evaluate this answer." : "The AI service is unavailable. Please try again.",
+    const isTimeout = error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
+    const isClientError = upstreamStatus && upstreamStatus < 500;
+    res.status(isTimeout ? 504 : isClientError ? upstreamStatus : 502).json({
+      message: isTimeout
+        ? "The AI service took too long to wake or evaluate this answer. Please try again."
+        : isClientError
+          ? "The AI service could not evaluate this answer."
+          : upstreamStatus
+            ? "The AI service returned an error. Check its Render logs and try again."
+          : "The AI service is unavailable. Please try again.",
       error: error.response?.data?.detail || error.message
     });
   }
